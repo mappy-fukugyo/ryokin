@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【改訂版】スマホ料金最適化 月次管理ダッシュボード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); padding: 1.5rem; }
+        .input-base { width: 100%; border: 1px solid #D1D5DB; border-radius: 0.375rem; padding: 0.5rem 0.75rem; transition: border-color 0.2s, box-shadow 0.2s; }
+        .input-base:focus { border-color: #3B82F6; box-shadow: 0 0 0 2px #BFDBFE; outline: none; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 600; text-align: center; cursor: pointer; transition: background-color 0.2s; }
+        .btn-primary { background-color: #2563EB; color: white; }
+        .btn-primary:hover { background-color: #1D4ED8; }
+        .btn-secondary { background-color: #F3F4F6; color: #1F2937; border: 1px solid #D1D5DB; }
+        .btn-secondary:hover { background-color: #E5E7EB; }
+        .btn-danger { background-color: #F87171; color: white; padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .btn-danger:hover { background-color: #EF4444; }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 lg:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-800">スマホ料金最適化 月次管理ダッシュボード</h1>
+            <p class="text-gray-600 mt-2">請求書のブラックボックスを解明し、あなたのスマホ料金を構造的に管理しましょう。</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="card md:col-span-2">
+                <h2 class="text-lg font-bold mb-4">基本情報</h2>
+                <div id="basic-info-form" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="month-selector" class="block text-sm font-medium text-gray-700">対象月</label>
+                        <input type="month" id="month-selector" class="input-base mt-1">
+                    </div>
+                    <div>
+                        <label for="phone-number" class="block text-sm font-medium text-gray-700">電話番号</label>
+                        <input type="tel" id="phone-number" placeholder="090-XXXX-XXXX" class="input-base mt-1 data-field" data-group="basicInfo">
+                    </div>
+                    <div>
+                        <label for="carrier" class="block text-sm font-medium text-gray-700">携帯電話会社</label>
+                        <select id="carrier" class="input-base mt-1 data-field" data-group="basicInfo">
+                            <option>ドコモ</option>
+                            <option>au</option>
+                            <option>ソフトバンク</option>
+                            <option>楽天モバイル</option>
+                            <option>UQモバイル</option>
+                            <option>ワイモバイル</option>
+                            <option value="other">その他</option>
+                        </select>
+                    </div>
+                    <div id="other-carrier-wrapper" class="hidden sm:col-span-2 md:col-span-1">
+                         <label for="other-carrier-input" class="block text-sm font-medium text-gray-700">キャリア名（入力）</label>
+                        <input type="text" id="other-carrier-input" placeholder="キャリア名を入力" class="input-base mt-1 data-field" data-group="basicInfo">
+                    </div>
+                </div>
+            </div>
+            <div class="card flex flex-col justify-center items-center bg-blue-50">
+                <h2 class="text-lg font-bold text-gray-700">当月請求総額</h2>
+                <p id="total-bill" class="text-4xl font-extrabold text-blue-600 mt-2">0 円</p>
+                <p class="text-sm text-gray-500 mt-1">小計 (A+B+C+D) の合計</p>
+            </div>
+        </div>
+
+        <div id="dashboard-form" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div class="card border-t-4 border-green-500 xl:col-span-2">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800">(A) 通信サービス関連費用</h2>
+                    <p class="text-2xl font-bold text-green-600" id="subtotal-a">0 円</p>
+                </div>
+                <p class="text-sm text-gray-500 mb-6">プラン比較の基準となる「真の通信コスト」</p>
+                
+                <div class="space-y-4">
+                    <div class="font-semibold">A-1: 基本使用料</div>
+                    <div class="flex gap-2 items-center">
+                        <input type="text" placeholder="プラン名 (例: ドコモ ポイ活 MAX)" class="input-base flex-grow data-field" data-key="basePlanName" data-group="costs">
+                        <input type="number" placeholder="金額" class="input-base w-28 text-right data-field" data-key="basePlanCost" data-group="costs">
+                    </div>
+                    <div id="additions-container" class="pl-4 border-l-2 border-gray-200 space-y-2"></div>
+                    <button id="add-addition-btn" class="btn btn-secondary w-full text-sm">+ 加算項目を追加 (オプション等)</button>
+                    <div id="discounts-container" class="pl-4 border-l-2 border-red-200 space-y-2"></div>
+                    <button id="add-discount-btn" class="btn btn-secondary w-full text-sm">- 割引項目を追加</button>
+
+                    <div class="font-semibold pt-4 border-t">A-2: 通話料・通信料</div>
+                     <div class="flex gap-2 items-center">
+                        <input type="text" placeholder="メモ (例: 5分通話無料オプション)" class="input-base flex-grow data-field" data-key="overageNotes" data-group="costs">
+                        <input type="number" placeholder="金額" class="input-base w-28 text-right data-field" data-key="overageCost" data-group="costs">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-t-4 border-yellow-500">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800">(B) 端末関連費用</h2>
+                    <p class="text-2xl font-bold text-yellow-600" id="subtotal-b">0 円</p>
+                </div>
+                <p class="text-sm text-gray-500 mb-6">通信サービスとは別の「ハードウェアローン」</p>
+                <div class="space-y-4">
+                    <div class="font-semibold">B-1: 端末等代金分割支払金</div>
+                    <div class="flex gap-2 items-center">
+                        <input type="text" placeholder="端末名 (例: iPhone 15 Pro)" class="input-base flex-grow data-field" data-key="deviceName" data-group="costs">
+                        <input type="number" placeholder="金額" class="input-base w-28 text-right data-field" data-key="deviceCost" data-group="costs">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">分割支払金残額 (メモ)</label>
+                        <input type="number" placeholder="残額" class="input-base mt-1 w-full text-right data-field" data-key="deviceBalance" data-group="costs">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-t-4 border-red-500 xl:col-span-2">
+                 <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800">(C) その他費用</h2>
+                    <p class="text-2xl font-bold text-red-600" id="subtotal-c">0 円</p>
+                </div>
+                <p class="text-sm text-gray-500 mb-6">家計の娯楽費・雑費として管理すべき支出</p>
+                <div class="space-y-4">
+                    <div class="font-semibold">C-1: 決済サービス代金等</div>
+                    <div id="carrier-billing-container" class="space-y-2"></div>
+                    <button id="add-carrier-billing-btn" class="btn btn-secondary w-full text-sm">+ 決済項目を追加</button>
+
+                    <div class="font-semibold pt-4 border-t">C-2: その他ご利用料金等</div>
+                    <div class="flex gap-2 items-center">
+                         <input type="text" placeholder="内訳 (例: 手数料)" class="input-base flex-grow data-field" data-key="otherFeesNotes" data-group="costs">
+                        <input type="number" placeholder="金額" class="input-base w-28 text-right data-field" data-key="otherFeesCost" data-group="costs">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div class="card border-t-4 border-purple-500">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-gray-800">(D) 消費税</h2>
+                        <p class="text-2xl font-bold text-purple-600" id="subtotal-d">0 円</p>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-6">消費税等相当額</p>
+                    <input type="number" placeholder="金額" class="input-base w-full text-right data-field" data-key="taxCost" data-group="costs">
+                </div>
+
+                <div class="card border-t-4 border-cyan-500">
+                    <h2 class="text-xl font-bold text-gray-800">(E) 獲得予定ポイント</h2>
+                    <p class="text-sm text-gray-500 mb-6">当月の獲得予定ポイント</p>
+                    <input type="number" placeholder="ポイント数" class="input-base w-full text-right data-field" data-key="earnedPoints" data-group="costs">
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+            <div class="card">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">費用構造分析 (当月)</h2>
+                <div class="h-80 flex items-center justify-center">
+                    <canvas id="structure-chart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">費用トレンド分析 (過去12ヶ月)</h2>
+                <div class="h-80 flex items-center justify-center">
+                    <canvas id="trend-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- State & DOM Elements ---
+    const state = { currentMonth: '', allData: {}, charts: { structure: null, trend: null } };
+    const monthSelector = document.getElementById('month-selector');
+    const basicInfoForm = document.getElementById('basic-info-form');
+    const dashboardForm = document.getElementById('dashboard-form');
+    const totalBillEl = document.getElementById('total-bill');
+    const subtotalEls = { a: document.getElementById('subtotal-a'), b: document.getElementById('subtotal-b'), c: document.getElementById('subtotal-c'), d: document.getElementById('subtotal-d') };
+    const carrierSelect = document.getElementById('carrier');
+    const otherCarrierWrapper = document.getElementById('other-carrier-wrapper');
+    const dynamicContainers = {
+        additions: document.getElementById('additions-container'),
+        discounts: document.getElementById('discounts-container'),
+        carrierBillings: document.getElementById('carrier-billing-container')
+    };
+
+    // --- Initialization ---
+    function init() {
+        loadAllData();
+        setupMonthSelector();
+        loadMonthData(state.currentMonth);
+        setupEventListeners();
+        calculateAndRender();
+    }
+
+    function setupMonthSelector() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        state.currentMonth = `${year}-${month}`;
+        monthSelector.value = state.currentMonth;
+    }
+
+    // --- Data Management ---
+    function loadAllData() { state.allData = JSON.parse(localStorage.getItem('smartphoneDashboardData_v2') || '{}'); }
+    function saveAllData() { localStorage.setItem('smartphoneDashboardData_v2', JSON.stringify(state.allData)); }
+    
+    function getDefaultData() {
+        return {
+            basicInfo: { phoneNumber: '', carrier: 'ドコモ', 'other-carrier-input': '' },
+            costs: { basePlanName: '', basePlanCost: '', overageNotes: '', overageCost: '', deviceName: '', deviceCost: '', deviceBalance: '', otherFeesNotes: '', otherFeesCost: '', taxCost: '', earnedPoints: '' },
+            additions: [], discounts: [], carrierBillings: []
+        };
+    }
+
+    function saveCurrentData() {
+        const data = getDefaultData();
+        
+        document.querySelectorAll('.data-field').forEach(el => {
+            if (el.dataset.group === 'basicInfo') data.basicInfo[el.id] = el.value;
+            if (el.dataset.group === 'costs') data.costs[el.dataset.key] = el.value;
+        });
+
+        Object.keys(dynamicContainers).forEach(key => {
+            dynamicContainers[key].querySelectorAll('.dynamic-row').forEach(row => {
+                data[key].push({
+                    name: row.querySelector('[data-key="name"]').value,
+                    cost: row.querySelector('[data-key="cost"]').value
+                });
+            });
+        });
+
+        state.allData[state.currentMonth] = data;
+        saveAllData();
+    }
+
+    function loadMonthData(month) {
+        const data = state.allData[month] || getDefaultData();
+        
+        Object.entries(data.basicInfo).forEach(([key, value]) => {
+            const el = document.getElementById(key);
+            if (el) el.value = value;
+        });
+        
+        Object.entries(data.costs).forEach(([key, value]) => {
+            const el = dashboardForm.querySelector(`.data-field[data-key="${key}"]`);
+            if (el) el.value = value;
+        });
+        
+        Object.keys(dynamicContainers).forEach(key => {
+            dynamicContainers[key].innerHTML = '';
+            (data[key] || []).forEach(item => {
+                if(key === 'additions') addDynamicRow('additions', item.name, item.cost);
+                if(key === 'discounts') addDynamicRow('discounts', item.name, item.cost);
+                if(key === 'carrierBillings') addDynamicRow('carrierBillings', item.name, item.cost);
+            });
+        });
+        
+        toggleOtherCarrierInput();
+    }
+    
+    // --- Dynamic Rows ---
+    function addDynamicRow(type, name = '', cost = '') {
+        const div = document.createElement('div');
+        div.className = 'flex gap-2 items-center dynamic-row';
+        div.innerHTML = `
+            <input type="text" placeholder="内訳" class="input-base flex-grow" data-key="name" value="${name}">
+            <input type="number" placeholder="金額" class="input-base w-28 text-right" data-key="cost" value="${cost}">
+            <button class="btn-danger btn remove-row-btn">×</button>
+        `;
+        dynamicContainers[type].appendChild(div);
+    }
+
+    // --- Calculation & Rendering ---
+    function calculateAndRender() {
+        const num = val => parseFloat(val) || 0;
+        
+        let subtotalA = num(dashboardForm.querySelector('[data-key="basePlanCost"]').value) + num(dashboardForm.querySelector('[data-key="overageCost"]').value);
+        dynamicContainers.additions.querySelectorAll('[data-key="cost"]').forEach(el => subtotalA += num(el.value));
+        dynamicContainers.discounts.querySelectorAll('[data-key="cost"]').forEach(el => subtotalA -= num(el.value)); // 割引は減算
+
+        let subtotalB = num(dashboardForm.querySelector('[data-key="deviceCost"]').value);
+        
+        let subtotalC = num(dashboardForm.querySelector('[data-key="otherFeesCost"]').value);
+        dynamicContainers.carrierBillings.querySelectorAll('[data-key="cost"]').forEach(el => subtotalC += num(el.value));
+
+        let subtotalD = num(dashboardForm.querySelector('[data-key="taxCost"]').value);
+
+        const totalBill = subtotalA + subtotalB + subtotalC + subtotalD;
+
+        const formatYen = val => `${val.toLocaleString()} 円`;
+        subtotalEls.a.textContent = formatYen(subtotalA);
+        subtotalEls.b.textContent = formatYen(subtotalB);
+        subtotalEls.c.textContent = formatYen(subtotalC);
+        subtotalEls.d.textContent = formatYen(subtotalD);
+        totalBillEl.textContent = formatYen(totalBill);
+        
+        saveCurrentData();
+        updateCharts({ a: subtotalA, b: subtotalB, c: subtotalC, d: subtotalD });
+    }
+    
+    // --- Charting ---
+    function updateCharts(subtotals) {
+        const structureCtx = document.getElementById('structure-chart').getContext('2d');
+        if (state.charts.structure) state.charts.structure.destroy();
+        state.charts.structure = new Chart(structureCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['(A) 通信サービス', '(B) 端末関連', '(C) その他'],
+                datasets: [{
+                    data: [Math.max(0, subtotals.a), Math.max(0, subtotals.b), Math.max(0, subtotals.c)],
+                    backgroundColor: ['#22C55E', '#F59E0B', '#EF4444'],
+                    borderColor: '#FFFFFF', borderWidth: 3
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' } } }
+        });
+
+        const trendCtx = document.getElementById('trend-chart').getContext('2d');
+        const labels = [], dataA = [], dataB = [], dataC = [], dataTotal = [];
+        const endDate = new Date(state.currentMonth + '-01');
+
+        for (let i = 11; i >= 0; i--) {
+            const date = new Date(endDate);
+            date.setMonth(date.getMonth() - i);
+            const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+            labels.push(`${date.getFullYear()}年${date.getMonth() + 1}月`);
+            
+            const d = state.allData[monthKey];
+            if (d) {
+                const num = val => parseFloat(val) || 0;
+                let sumA = num(d.costs.basePlanCost) + num(d.costs.overageCost);
+                (d.additions || []).forEach(item => sumA += num(item.cost));
+                (d.discounts || []).forEach(item => sumA -= num(item.cost));
+                const sumB = num(d.costs.deviceCost);
+                let sumC = num(d.costs.otherFeesCost);
+                (d.carrierBillings || []).forEach(item => sumC += num(item.cost));
+                const sumD = num(d.costs.taxCost);
+                
+                dataA.push(sumA); dataB.push(sumB); dataC.push(sumC);
+                dataTotal.push(sumA + sumB + sumC + sumD);
+            } else {
+                dataA.push(0); dataB.push(0); dataC.push(0); dataTotal.push(0);
+            }
+        }
+        
+        if (state.charts.trend) state.charts.trend.destroy();
+        state.charts.trend = new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: '請求総額', data: dataTotal, borderColor: '#3B82F6', tension: 0.1, borderWidth: 3 },
+                    { label: '(A) 通信', data: dataA, borderColor: '#22C55E', tension: 0.1, hidden: true },
+                    { label: '(B) 端末', data: dataB, borderColor: '#F59E0B', tension: 0.1, hidden: true },
+                    { label: '(C) その他', data: dataC, borderColor: '#EF4444', tension: 0.1, hidden: true }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    // --- Event Listeners ---
+    function toggleOtherCarrierInput() {
+        if (carrierSelect.value === 'other') {
+            otherCarrierWrapper.classList.remove('hidden');
+        } else {
+            otherCarrierWrapper.classList.add('hidden');
+            document.getElementById('other-carrier-input').value = '';
+        }
+    }
+    
+    function setupEventListeners() {
+        monthSelector.addEventListener('change', e => {
+            state.currentMonth = e.target.value;
+            loadMonthData(state.currentMonth);
+            calculateAndRender();
+        });
+
+        carrierSelect.addEventListener('change', () => {
+             toggleOtherCarrierInput();
+             saveCurrentData(); // Save the change immediately
+        });
+        
+        document.getElementById('add-addition-btn').addEventListener('click', () => addDynamicRow('additions'));
+        document.getElementById('add-discount-btn').addEventListener('click', () => addDynamicRow('discounts'));
+        document.getElementById('add-carrier-billing-btn').addEventListener('click', () => addDynamicRow('carrierBillings'));
+
+        dashboardForm.addEventListener('input', e => {
+            if (e.target.matches('input')) calculateAndRender();
+        });
+        
+        basicInfoForm.addEventListener('input', e => {
+            if (e.target.matches('input, select')) calculateAndRender();
+        });
+
+        dashboardForm.addEventListener('click', e => {
+            if (e.target.classList.contains('remove-row-btn')) {
+                e.target.closest('.dynamic-row').remove();
+                calculateAndRender();
+            }
+        });
+    }
+
+    init();
+});
+</script>
+
+</body>
+</html>
